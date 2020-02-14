@@ -141,6 +141,7 @@ func (c *Client) DoDeadline(req RequestWriter, resp ResponseReader, deadline tim
 	c.once.Do(c.init)
 
 	n := c.incPendingRequests()
+	defer c.decPendingRequests()
 
 	if n >= c.maxPendingRequests() {
 		c.decPendingRequests()
@@ -148,26 +149,18 @@ func (c *Client) DoDeadline(req RequestWriter, resp ResponseReader, deadline tim
 	}
 
 	wi := acquireClientWorkItem()
+	defer releaseClientWorkItem(wi)
+
 	wi.req = req
 	wi.resp = resp
 	wi.deadline = deadline
+
 	if err := c.enqueueWorkItem(wi); err != nil {
-		c.decPendingRequests()
 		releaseClientWorkItem(wi)
 		return c.getError(err)
 	}
 
-	// the client guarantees that wi.done is unblocked before deadline,
-	// so do not use select with time.After here.
-	//
-	// This saves memory and CPU resources.
-	err := <-wi.done
-
-	releaseClientWorkItem(wi)
-
-	c.decPendingRequests()
-
-	return err
+	return <-wi.done
 }
 
 func (c *Client) enqueueWorkItem(wi *clientWorkItem) error {
@@ -181,8 +174,8 @@ func (c *Client) enqueueWorkItem(wi *clientWorkItem) error {
 
 		// slow path
 		select {
-		case wiOld := <-c.pendingRequests:
-			c.doneError(wiOld, ErrPendingRequestsOverflow)
+		case old := <-c.pendingRequests:
+			c.doneError(old, ErrPendingRequestsOverflow)
 			select {
 			case c.pendingRequests <- wi:
 				return nil
@@ -258,18 +251,20 @@ func (c *Client) unblockStaleRequests() bool {
 }
 
 func (c *Client) unblockStaleResponses() bool {
-	found := false
-	t := time.Now()
+	now, unblocked := time.Now(), false
+
 	c.pendingResponsesLock.Lock()
-	for reqID, wi := range c.pendingResponses {
-		if t.After(wi.deadline) {
+	defer c.pendingResponsesLock.Unlock()
+
+	for nonce, wi := range c.pendingResponses {
+		if now.After(wi.deadline) {
+			delete(c.pendingResponses, nonce)
 			c.doneError(wi, ErrTimeout)
-			delete(c.pendingResponses, reqID)
-			found = true
+			unblocked = true
 		}
 	}
-	c.pendingResponsesLock.Unlock()
-	return found
+
+	return unblocked
 }
 
 // PendingRequests returns the number of pending requests at the moment.
@@ -306,22 +301,22 @@ func (c *Client) worker() {
 			time.Sleep(time.Second)
 			continue
 		}
-		c.setLastError(err)
+
 		laddr := conn.LocalAddr().String()
 		raddr := conn.RemoteAddr().String()
+
 		err = c.serveConn(conn)
 
-		// close all the pending responses, since they cannot be completed
-		// after the connection is closed.
 		if err == nil {
 			c.setLastError(fmt.Errorf("%s<->%s: connection closed by server", laddr, raddr))
 		} else {
 			c.setLastError(fmt.Errorf("%s<->%s: %s", laddr, raddr, err))
 		}
+
 		c.pendingResponsesLock.Lock()
-		for reqID, wi := range c.pendingResponses {
+		for nonce, wi := range c.pendingResponses {
 			c.doneError(wi, nil)
-			delete(c.pendingResponses, reqID)
+			delete(c.pendingResponses, nonce)
 		}
 		c.pendingResponsesLock.Unlock()
 	}
@@ -380,7 +375,7 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 
 	writeTimeout := c.WriteTimeout
 	var lastWriteDeadline time.Time
-	var nextReqID uint32
+	var nextNonce uint32
 	for {
 		select {
 		case wi = <-c.pendingRequests:
@@ -405,13 +400,13 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 			continue
 		}
 
-		reqID := uint32(0)
+		nonce := uint32(0)
 		if wi.resp != nil {
-			nextReqID++
-			if nextReqID == 0 {
-				nextReqID = 1
+			nextNonce++
+			if nextNonce == 0 {
+				nextNonce = 1
 			}
-			reqID = nextReqID
+			nonce = nextNonce
 		}
 
 		if writeTimeout > 0 {
@@ -430,7 +425,7 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 			}
 		}
 
-		b := appendUint32(buf[:0], reqID)
+		b := appendUint32(buf[:0], nonce)
 		if _, err := bw.Write(b); err != nil {
 			err = fmt.Errorf("cannot send request ID to the server: %s", err)
 			c.doneError(wi, err)
@@ -448,13 +443,13 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 			releaseClientWorkItem(wi)
 		} else {
 			c.pendingResponsesLock.Lock()
-			if _, ok := c.pendingResponses[reqID]; ok {
+			if _, ok := c.pendingResponses[nonce]; ok {
 				c.pendingResponsesLock.Unlock()
-				err := fmt.Errorf("request ID overflow. id=%d", reqID)
+				err := fmt.Errorf("request ID overflow. id=%d", nonce)
 				c.doneError(wi, err)
 				return err
 			}
-			c.pendingResponses[reqID] = wi
+			c.pendingResponses[nonce] = wi
 			c.pendingResponsesLock.Unlock()
 		}
 
@@ -482,14 +477,10 @@ func (c *Client) connReader(br *bufio.Reader, conn net.Conn) error {
 	var lastReadDeadline time.Time
 	for {
 		if readTimeout > 0 {
-			// Optimization: update read deadline only if more than 25%
-			// of the last read deadline exceeded.
-			// See https://github.com/golang/go/issues/15133 for details.
 			t := coarseTimeNow()
+
 			if t.Sub(lastReadDeadline) > (readTimeout >> 2) {
 				if err := conn.SetReadDeadline(t.Add(readTimeout)); err != nil {
-					// do not panic here, since the error may
-					// indicate that the connection is already closed
 					return fmt.Errorf("cannot update read deadline: %s", err)
 				}
 				lastReadDeadline = t
@@ -503,11 +494,11 @@ func (c *Client) connReader(br *bufio.Reader, conn net.Conn) error {
 			return fmt.Errorf("cannot read response ID: %s", err)
 		}
 
-		reqID := bytes2Uint32(buf)
+		nonce := bytes2Uint32(buf)
 
 		c.pendingResponsesLock.Lock()
-		wi := c.pendingResponses[reqID]
-		delete(c.pendingResponses, reqID)
+		wi := c.pendingResponses[nonce]
+		delete(c.pendingResponses, nonce)
 		c.pendingResponsesLock.Unlock()
 
 		resp = nil
@@ -519,7 +510,7 @@ func (c *Client) connReader(br *bufio.Reader, conn net.Conn) error {
 		}
 
 		if err := resp.ReadResponse(br); err != nil {
-			err = fmt.Errorf("cannot read response with ID %d: %s", reqID, err)
+			err = fmt.Errorf("cannot read response with ID %d: %s", nonce, err)
 			if wi != nil {
 				c.doneError(wi, err)
 			}

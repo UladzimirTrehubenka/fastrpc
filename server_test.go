@@ -34,9 +34,9 @@ func TestServerBrokenClientGarbageRequest(t *testing.T) {
 
 func TestServerBrokenClientSendRequestAndCloseConn(t *testing.T) {
 	testServerBrokenClient(t, func(conn net.Conn) error {
-		var reqID [4]byte
-		if _, err := conn.Write(reqID[:]); err != nil {
-			return fmt.Errorf("cannot send reqID to the server: %s", err)
+		var nonce [4]byte
+		if _, err := conn.Write(nonce[:]); err != nil {
+			return fmt.Errorf("cannot send nonce to the server: %s", err)
 		}
 
 		var req tlv.Request

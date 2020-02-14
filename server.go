@@ -222,7 +222,7 @@ func (s *Server) connReader(br *bufio.Reader, conn net.Conn, pendingResponses ch
 			}
 		}
 
-		if n, err := io.ReadFull(br, wi.reqID[:]); err != nil {
+		if n, err := io.ReadFull(br, wi.nonce[:]); err != nil {
 			if n == 0 {
 				// Ignore error if no bytes are read, since
 				// the client may just close the connection.
@@ -257,10 +257,9 @@ func (s *Server) connReader(br *bufio.Reader, conn net.Conn, pendingResponses ch
 }
 
 func (s *Server) handleRequest(wi *serverWorkItem, pendingResponses chan<- *serverWorkItem, stopCh <-chan struct{}) {
-	reqID := wi.reqID
-	ctxNew := s.Handler(wi.ctx)
-	if isZeroReqID(reqID) {
-		// Do not send response for SendNowait request.
+	nonce, ctxNew := wi.nonce, s.Handler(wi.ctx)
+
+	if isZeroNonce(nonce) {
 		if ctxNew == wi.ctx {
 			s.releaseWorkItem(wi)
 		}
@@ -271,10 +270,9 @@ func (s *Server) handleRequest(wi *serverWorkItem, pendingResponses chan<- *serv
 		if ctxNew == nil {
 			panic("BUG: Server.Handler mustn't return nil")
 		}
-		// The current ctx may be still in use by the handler.
-		// So create new wi for passing to pendingResponses.
+
 		wi = s.acquireWorkItem()
-		wi.reqID = reqID
+		wi.nonce = nonce
 		wi.ctx = ctxNew
 	}
 	pushPendingResponse(pendingResponses, wi, stopCh)
@@ -310,6 +308,7 @@ func (s *Server) connWriter(bw *bufio.Writer, conn net.Conn, pendingResponses <-
 	}
 
 	writeTimeout := s.WriteTimeout
+
 	var lastWriteDeadline time.Time
 	for {
 		select {
@@ -343,7 +342,7 @@ func (s *Server) connWriter(bw *bufio.Writer, conn net.Conn, pendingResponses <-
 			}
 		}
 
-		if _, err := bw.Write(wi.reqID[:]); err != nil {
+		if _, err := bw.Write(wi.nonce[:]); err != nil {
 			return fmt.Errorf("cannot write response ID: %s", err)
 		}
 		if err := wi.ctx.WriteResponse(bw); err != nil {
@@ -366,7 +365,7 @@ func (s *Server) connWriter(bw *bufio.Writer, conn net.Conn, pendingResponses <-
 
 type serverWorkItem struct {
 	ctx   HandlerCtx
-	reqID [4]byte
+	nonce [4]byte
 }
 
 func (s *Server) acquireWorkItem() *serverWorkItem {
@@ -392,6 +391,6 @@ func (s *Server) logger() fasthttp.Logger {
 	return defaultLogger
 }
 
-func isZeroReqID(reqID [4]byte) bool {
-	return reqID[0] == 0 && reqID[1] == 0 && reqID[2] == 0 && reqID[3] == 0
+func isZeroNonce(nonce [4]byte) bool {
+	return nonce[0] == 0 && nonce[1] == 0 && nonce[2] == 0 && nonce[3] == 0
 }

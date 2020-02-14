@@ -115,10 +115,10 @@ func TestClientBrokenServerGarbageResponse(t *testing.T) {
 
 func TestClientBrokenServerCheckRequest(t *testing.T) {
 	testClientBrokenServer(t, func(conn net.Conn) error {
-		var reqID [4]byte
-		_, err := io.ReadFull(conn, reqID[:])
+		var nonce [4]byte
+		_, err := io.ReadFull(conn, nonce[:])
 		if err != nil {
-			return fmt.Errorf("cannot read reqID from the client: %s", err)
+			return fmt.Errorf("cannot read nonce from the client: %s", err)
 		}
 
 		var req tlv.Request
@@ -130,8 +130,8 @@ func TestClientBrokenServerCheckRequest(t *testing.T) {
 			return fmt.Errorf("invalid request: %q. Expecting %q", req.Value(), "foobar")
 		}
 
-		if _, err = conn.Write(reqID[:]); err != nil {
-			return fmt.Errorf("cannot send reqID to the client: %s", err)
+		if _, err = conn.Write(nonce[:]); err != nil {
+			return fmt.Errorf("cannot send nonce to the client: %s", err)
 		}
 		if _, err = conn.Write([]byte("invalid\nhttp\nresponse")); err != nil {
 			return fmt.Errorf("cannot send invalid http response to the client: %s", err)
