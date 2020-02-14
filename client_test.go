@@ -150,7 +150,6 @@ func testClientBrokenServer(t *testing.T, serverConnFunc func(net.Conn) error) {
 		Dial: func(addr string) (net.Conn, error) {
 			return ln.Dial()
 		},
-		CompressType: CompressNone,
 	}
 
 	serverStopCh := make(chan error, 1)

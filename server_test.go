@@ -72,7 +72,6 @@ func testServerBrokenClient(t *testing.T, clientConnFunc func(net.Conn) error) {
 		NewHandlerCtx: newTestHandlerCtx,
 		Handler:       testEchoHandler,
 		Logger:        &nilLogger{},
-		CompressType:  CompressNone,
 	}
 	serverStop, ln := newTestServerExt(s)
 
@@ -266,80 +265,6 @@ func TestServerBatchDelayRequestResponseConcurrent(t *testing.T) {
 	c.MaxBatchDelay = 10 * time.Millisecond
 
 	if err := testServerClientConcurrent(func() error { return testGetBatchDelay(c) }); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	if err := serverStop(); err != nil {
-		t.Fatalf("cannot shutdown server: %s", err)
-	}
-}
-
-func TestServerCompressNoneSerial(t *testing.T) {
-	testServerCompressSerial(t, CompressNone, CompressNone)
-}
-
-func TestServerCompressNoneConcurrent(t *testing.T) {
-	testServerCompressConcurrent(t, CompressNone, CompressNone)
-}
-
-func TestServerCompressFlateSerial(t *testing.T) {
-	testServerCompressSerial(t, CompressFlate, CompressFlate)
-}
-
-func TestServerCompressFlateConcurrent(t *testing.T) {
-	testServerCompressConcurrent(t, CompressFlate, CompressFlate)
-}
-
-func TestServerCompressSnappySerial(t *testing.T) {
-	testServerCompressSerial(t, CompressSnappy, CompressSnappy)
-}
-
-func TestServerCompressSnappyConcurrent(t *testing.T) {
-	testServerCompressConcurrent(t, CompressSnappy, CompressSnappy)
-}
-
-func TestServerCompressMixedSerial(t *testing.T) {
-	testServerCompressSerial(t, CompressSnappy, CompressFlate)
-	testServerCompressSerial(t, CompressNone, CompressFlate)
-	testServerCompressSerial(t, CompressFlate, CompressSnappy)
-	testServerCompressSerial(t, CompressSnappy, CompressNone)
-}
-
-func TestServerCompressMixedConcurrent(t *testing.T) {
-	testServerCompressConcurrent(t, CompressSnappy, CompressFlate)
-	testServerCompressConcurrent(t, CompressNone, CompressFlate)
-	testServerCompressConcurrent(t, CompressFlate, CompressSnappy)
-	testServerCompressConcurrent(t, CompressSnappy, CompressNone)
-}
-
-func testServerCompressSerial(t *testing.T, reqCompressType, respCompressType CompressType) {
-	s := &Server{
-		NewHandlerCtx: newTestHandlerCtx,
-		Handler:       testEchoHandler,
-		CompressType:  respCompressType,
-	}
-	serverStop, c := newTestServerClientExt(s)
-	c.CompressType = reqCompressType
-
-	if err := testGet(c); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	if err := serverStop(); err != nil {
-		t.Fatalf("cannot shutdown server: %s", err)
-	}
-}
-
-func testServerCompressConcurrent(t *testing.T, reqCompressType, respCompressType CompressType) {
-	s := &Server{
-		NewHandlerCtx: newTestHandlerCtx,
-		Handler:       testEchoHandler,
-		CompressType:  respCompressType,
-	}
-	serverStop, c := newTestServerClientExt(s)
-	c.CompressType = reqCompressType
-
-	if err := testServerClientConcurrent(func() error { return testGet(c) }); err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
 

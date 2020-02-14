@@ -45,11 +45,6 @@ type Server struct {
 	// Otherwise new ctx must be returned.
 	Handler func(ctx HandlerCtx) HandlerCtx
 
-	// CompressType is the compression type used for responses.
-	//
-	// CompressFlate is used by default.
-	CompressType CompressType
-
 	// Concurrency is the maximum number of concurrent goroutines
 	// with Server.Handler the server may run.
 	//

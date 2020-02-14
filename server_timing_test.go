@@ -10,71 +10,63 @@ import (
 )
 
 func BenchmarkEndToEndNoDelay1(b *testing.B) {
-	benchmarkEndToEnd(b, 1, 0, CompressNone, false)
+	benchmarkEndToEnd(b, 1, 0, false)
 }
 
 func BenchmarkEndToEndNoDelay10(b *testing.B) {
-	benchmarkEndToEnd(b, 10, 0, CompressNone, false)
+	benchmarkEndToEnd(b, 10, 0, false)
 }
 
 func BenchmarkEndToEndNoDelay100(b *testing.B) {
-	benchmarkEndToEnd(b, 100, 0, CompressNone, false)
+	benchmarkEndToEnd(b, 100, 0, false)
 }
 
 func BenchmarkEndToEndNoDelay1000(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 0, CompressNone, false)
+	benchmarkEndToEnd(b, 1000, 0, false)
 }
 
 func BenchmarkEndToEndNoDelay10K(b *testing.B) {
-	benchmarkEndToEnd(b, 10000, 0, CompressNone, false)
+	benchmarkEndToEnd(b, 10000, 0, false)
 }
 
 func BenchmarkEndToEndDelay1ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressNone, false)
+	benchmarkEndToEnd(b, 1000, time.Millisecond, false)
 }
 
 func BenchmarkEndToEndDelay2ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 2*time.Millisecond, CompressNone, false)
+	benchmarkEndToEnd(b, 1000, 2*time.Millisecond, false)
 }
 
 func BenchmarkEndToEndDelay4ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 4*time.Millisecond, CompressNone, false)
+	benchmarkEndToEnd(b, 1000, 4*time.Millisecond, false)
 }
 
 func BenchmarkEndToEndDelay8ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 8*time.Millisecond, CompressNone, false)
+	benchmarkEndToEnd(b, 1000, 8*time.Millisecond, false)
 }
 
 func BenchmarkEndToEndDelay16ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 16*time.Millisecond, CompressNone, false)
+	benchmarkEndToEnd(b, 1000, 16*time.Millisecond, false)
 }
 
-func BenchmarkEndToEndCompressNone(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressNone, false)
-}
-
-func BenchmarkEndToEndCompressFlate(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressFlate, false)
-}
-
-func BenchmarkEndToEndCompressSnappy(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressSnappy, false)
+func BenchmarkEndToEnd(b *testing.B) {
+	benchmarkEndToEnd(b, 1000, time.Millisecond, false)
 }
 
 func BenchmarkEndToEndPipeline1(b *testing.B) {
-	benchmarkEndToEnd(b, 1, 0, CompressNone, true)
+	benchmarkEndToEnd(b, 1, 0, true)
 }
 
 func BenchmarkEndToEndPipeline10(b *testing.B) {
-	benchmarkEndToEnd(b, 10, 0, CompressNone, true)
+	benchmarkEndToEnd(b, 10, 0, true)
 }
 
 func BenchmarkEndToEndPipeline100(b *testing.B) {
-	benchmarkEndToEnd(b, 100, 0, CompressNone, true)
+	benchmarkEndToEnd(b, 100, 0, true)
 }
 
 func BenchmarkEndToEndPipeline1000(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 0, CompressNone, true)
+	benchmarkEndToEnd(b, 1000, 0, true)
 }
 
 func BenchmarkSendNowait(b *testing.B) {
@@ -91,7 +83,6 @@ func BenchmarkSendNowait(b *testing.B) {
 			return ctxv
 		},
 		Concurrency:      runtime.GOMAXPROCS(-1) + 1,
-		CompressType:     CompressNone,
 		PipelineRequests: true,
 	}
 	serverStop, ln := newTestServerExt(s)
@@ -100,7 +91,6 @@ func BenchmarkSendNowait(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		c := newTestClient(ln)
 		c.MaxPendingRequests = 1e2
-		c.CompressType = CompressNone
 		for pb.Next() {
 			for {
 				req := acquireTestRequest()
@@ -139,7 +129,7 @@ func BenchmarkSendNowait(b *testing.B) {
 	}
 }
 
-func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, compressType CompressType, pipelineRequests bool) {
+func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, pipelineRequests bool) {
 	var serverBatchDelay time.Duration
 	if batchDelay > 0 {
 		serverBatchDelay = 100 * time.Microsecond
@@ -157,7 +147,6 @@ func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, 
 		},
 		Concurrency:      parallelism * runtime.NumCPU(),
 		MaxBatchDelay:    serverBatchDelay,
-		CompressType:     compressType,
 		PipelineRequests: pipelineRequests,
 	}
 	serverStop, ln := newTestServerExt(s)
@@ -167,7 +156,6 @@ func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, 
 		c := newTestClient(ln)
 		c.MaxPendingRequests = s.Concurrency
 		c.MaxBatchDelay = batchDelay
-		c.CompressType = compressType
 		cc = append(cc, c)
 	}
 	var clientIdx uint32

@@ -36,11 +36,6 @@ type Client struct {
 	// Addr is the Server address to connect to.
 	Addr string
 
-	// CompressType is the compression type used for requests.
-	//
-	// CompressFlate is used by default.
-	CompressType CompressType
-
 	// Dial is a custom function used for connecting to the Server.
 	//
 	// fasthttp.Dial is used by default.
