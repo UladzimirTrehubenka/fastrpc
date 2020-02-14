@@ -30,10 +30,10 @@ func (resp *Response) Append(p []byte) {
 	resp.value = append(resp.value, p...)
 }
 
-// SwapValue swaps the given value with the response's value.
+// Swap swaps the given value with the response's value.
 //
 // It is forbidden accessing the swapped value after the call.
-func (resp *Response) SwapValue(value []byte) []byte {
+func (resp *Response) Swap(value []byte) []byte {
 	v := resp.value
 	resp.value = value
 	return v

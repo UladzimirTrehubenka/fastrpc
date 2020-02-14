@@ -103,17 +103,18 @@ var zeroTCPAddr = &net.TCPAddr{
 	IP: net.IPv4zero,
 }
 
-var ctxLoggerLock sync.Mutex
-
 type ctxLogger struct {
+	sync.Mutex
+
 	ctx    *RequestCtx
 	logger fasthttp.Logger
 }
 
 func (cl *ctxLogger) Printf(format string, args ...interface{}) {
-	ctxLoggerLock.Lock()
-	msg := fmt.Sprintf(format, args...)
-	ctx := cl.ctx
+	cl.Lock()
+	defer cl.Unlock()
+
+	ctx, msg := cl.ctx, fmt.Sprintf(format, args...)
+
 	cl.logger.Printf("%s<->%s - %s", ctx.LocalAddr(), ctx.RemoteAddr(), msg)
-	ctxLoggerLock.Unlock()
 }

@@ -64,7 +64,7 @@ func newTestHandlerCtx() HandlerCtx {
 }
 
 func concurrencyLimitErrorHandler(ctx *tlv.RequestCtx, concurrency int) {
-	ctx.Response.SwapValue([]byte("too many requests"))
+	ctx.Response.Swap([]byte("too many requests"))
 }
 
 func testServerBrokenClient(t *testing.T, clientConnFunc func(net.Conn) error) {
