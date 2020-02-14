@@ -14,7 +14,7 @@ func TestResponseMarshalUnmarshal(t *testing.T) {
 	bw := bufio.NewWriter(&buf)
 	for i := 0; i < 10; i++ {
 		value := fmt.Sprintf("value %d", i)
-		resp.SwapValue([]byte(value))
+		resp.Swap([]byte(value))
 		if err := resp.WriteResponse(bw); err != nil {
 			t.Fatalf("unexpected error when writing response: %s", err)
 		}
@@ -31,8 +31,8 @@ func TestResponseMarshalUnmarshal(t *testing.T) {
 		if err := resp1.ReadResponse(br); err != nil {
 			t.Fatalf("unexpected error when reading response: %s", err)
 		}
-		if string(resp1.Value()) != value {
-			t.Fatalf("unexpected request value read: %q. Expecting %q", resp1.Value(), value)
+		if string(resp1.B) != value {
+			t.Fatalf("unexpected request value read: %q. Expecting %q", resp1.B, value)
 		}
 	}
 	ReleaseResponse(resp1)

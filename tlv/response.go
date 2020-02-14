@@ -8,48 +8,40 @@ import (
 
 // Response is a TLV response.
 type Response struct {
-	value  []byte
+	B      []byte
 	header [4]byte
 }
 
 // Reset resets the given response.
-func (resp *Response) Reset() {
-	resp.value = resp.value[:0]
+func (r *Response) Reset() {
+	r.B = r.B[:0]
 }
 
 // Write appends p to the response value.
 //
 // It implements io.Writer.
-func (resp *Response) Write(p []byte) (int, error) {
-	resp.Append(p)
+func (r *Response) Write(p []byte) (int, error) {
+	r.Append(p)
 	return len(p), nil
 }
 
 // Append appends p to the response value.
-func (resp *Response) Append(p []byte) {
-	resp.value = append(resp.value, p...)
+func (r *Response) Append(p []byte) {
+	r.B = append(r.B, p...)
 }
 
 // Swap swaps the given value with the response's value.
 //
 // It is forbidden accessing the swapped value after the call.
-func (resp *Response) Swap(value []byte) []byte {
-	v := resp.value
-	resp.value = value
+func (r *Response) Swap(value []byte) []byte {
+	v := r.B
+	r.B = value
 	return v
 }
 
-// Value returns response value.
-//
-// The returned value is valid until the next Response method call.
-// or until ReleaseResponse is called.
-func (resp *Response) Value() []byte {
-	return resp.value
-}
-
 // WriteResponse writes the response to bw.
-func (resp *Response) WriteResponse(bw *bufio.Writer) error {
-	if err := writeBytes(bw, resp.value, resp.header[:]); err != nil {
+func (r *Response) WriteResponse(bw *bufio.Writer) error {
+	if err := writeBytes(bw, r.B, r.header[:]); err != nil {
 		return fmt.Errorf("cannot write response value: %s", err)
 	}
 	return nil
@@ -58,9 +50,9 @@ func (resp *Response) WriteResponse(bw *bufio.Writer) error {
 // ReadResponse reads the response from br.
 //
 // It implements fastrpc.ReadResponse.
-func (resp *Response) ReadResponse(br *bufio.Reader) error {
+func (r *Response) ReadResponse(br *bufio.Reader) error {
 	var err error
-	resp.value, err = readBytes(br, resp.value[:0], resp.header[:])
+	r.B, err = readBytes(br, r.B[:0], r.header[:])
 	if err != nil {
 		return fmt.Errorf("cannot read request value: %s", err)
 	}
@@ -77,9 +69,9 @@ func AcquireResponse() *Response {
 }
 
 // ReleaseResponse releases the given response.
-func ReleaseResponse(resp *Response) {
-	resp.Reset()
-	responsePool.Put(resp)
+func ReleaseResponse(r *Response) {
+	r.Reset()
+	responsePool.Put(r)
 }
 
 var responsePool sync.Pool

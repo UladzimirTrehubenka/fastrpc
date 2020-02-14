@@ -173,8 +173,8 @@ func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, 
 			if err := c.DoDeadline(&req, &resp, deadline); err != nil {
 				b.Fatalf("unexpected error: %s", err)
 			}
-			if !bytes.Equal(resp.Value(), expectedBody) {
-				b.Fatalf("unexpected body: %q. Expecting %q", resp.Value(), expectedBody)
+			if !bytes.Equal(resp.B, expectedBody) {
+				b.Fatalf("unexpected body: %q. Expecting %q", resp.B, expectedBody)
 			}
 		}
 	})

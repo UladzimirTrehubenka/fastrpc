@@ -48,8 +48,14 @@ func (req *Request) Append(p []byte) {
 // It is forbidden accessing the swapped value after the call.
 func (req *Request) SwapValue(value []byte) []byte {
 	v := req.value
-	req.value = value
+	req.SetValue(value)
 	return v
+}
+
+// SetValue sets the requests value to the given value.
+func (req *Request) SetValue(value []byte) {
+	req.value = append(req.value[:0], value...)
+	req.value = req.value[:len(value)]
 }
 
 // Value returns request value.
