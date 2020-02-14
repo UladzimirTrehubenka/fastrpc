@@ -31,7 +31,7 @@ const (
 
 var zeroTime time.Time
 
-func newBufioConn(conn net.Conn, readBufferSize, writeBufferSize int, handshake func(conn net.Conn) (net.Conn, error), handshakeTimeout time.Duration) (*bufio.Reader, *bufio.Writer, error) {
+func newBufioConn(conn net.Conn, readBufferSize, writeBufferSize int, handshake func(conn net.Conn) (net.Conn, error), handshakeTimeout time.Duration) (net.Conn, *bufio.Reader, *bufio.Writer, error) {
 	if handshake != nil {
 		var err error
 
@@ -42,22 +42,22 @@ func newBufioConn(conn net.Conn, readBufferSize, writeBufferSize int, handshake 
 		deadline := time.Now().Add(handshakeTimeout)
 
 		if err = conn.SetWriteDeadline(deadline); err != nil {
-			return nil, nil, fmt.Errorf("cannot set write timeout: %s", err)
+			return nil, nil, nil, fmt.Errorf("cannot set write timeout: %s", err)
 		}
 		if err = conn.SetReadDeadline(deadline); err != nil {
-			return nil, nil, fmt.Errorf("cannot set read timeout: %s", err)
+			return nil, nil, nil, fmt.Errorf("cannot set read timeout: %s", err)
 		}
 
 		conn, err = handshake(conn)
 
 		if err != nil {
-			return nil, nil, fmt.Errorf("error in handshake: %s", err)
+			return nil, nil, nil, fmt.Errorf("error in handshake: %s", err)
 		}
 		if err = conn.SetWriteDeadline(zeroTime); err != nil {
-			return nil, nil, fmt.Errorf("cannot reset write timeout: %s", err)
+			return nil, nil, nil, fmt.Errorf("cannot reset write timeout: %s", err)
 		}
 		if err = conn.SetReadDeadline(zeroTime); err != nil {
-			return nil, nil, fmt.Errorf("cannot reset read timeout: %s", err)
+			return nil, nil, nil, fmt.Errorf("cannot reset read timeout: %s", err)
 		}
 	}
 
@@ -73,7 +73,7 @@ func newBufioConn(conn net.Conn, readBufferSize, writeBufferSize int, handshake 
 
 	bw := bufio.NewWriterSize(conn, writeBufferSize)
 
-	return br, bw, nil
+	return conn, br, bw, nil
 }
 
 func getFlushTimer() *time.Timer {

@@ -167,11 +167,13 @@ func (s *Server) Serve(ln net.Listener) error {
 }
 
 func (s *Server) serveConn(conn net.Conn) error {
-	br, bw, err := newBufioConn(conn, s.ReadBufferSize, s.WriteBufferSize, s.Handshake, s.HandshakeTimeout)
+	realConn, br, bw, err := newBufioConn(conn, s.ReadBufferSize, s.WriteBufferSize, s.Handshake, s.HandshakeTimeout)
 	if err != nil {
 		conn.Close()
 		return err
 	}
+
+	conn = realConn
 
 	stopCh := make(chan struct{})
 
