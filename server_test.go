@@ -69,7 +69,6 @@ func concurrencyLimitErrorHandler(ctx *tlv.RequestCtx, concurrency int) {
 
 func testServerBrokenClient(t *testing.T, clientConnFunc func(net.Conn) error) {
 	s := &Server{
-		SniffHeader:     []byte("wqwer"),
 		ProtocolVersion: 123,
 		NewHandlerCtx:   newTestHandlerCtx,
 		Handler:         testEchoHandler,
@@ -87,7 +86,6 @@ func testServerBrokenClient(t *testing.T, clientConnFunc func(net.Conn) error) {
 		}
 
 		cfg := &handshakeConfig{
-			sniffHeader:       s.SniffHeader,
 			protocolVersion:   s.ProtocolVersion,
 			conn:              conn,
 			writeCompressType: s.CompressType,

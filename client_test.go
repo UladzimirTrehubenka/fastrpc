@@ -147,7 +147,6 @@ func testClientBrokenServer(t *testing.T, serverConnFunc func(net.Conn) error) {
 	ln := fasthttputil.NewInmemoryListener()
 	c := &Client{
 		ProtocolVersion: 123,
-		SniffHeader:     []byte("xxxxsss"),
 		NewResponse:     newTestResponse,
 		Dial: func(addr string) (net.Conn, error) {
 			return ln.Dial()
@@ -166,7 +165,6 @@ func testClientBrokenServer(t *testing.T, serverConnFunc func(net.Conn) error) {
 			conn:              conn,
 			writeCompressType: c.CompressType,
 			protocolVersion:   c.ProtocolVersion,
-			sniffHeader:       []byte(c.SniffHeader),
 		}
 		readCompressType, realConn, err := handshakeServer(cfg)
 		if err != nil {

@@ -2,7 +2,6 @@ package fastrpc
 
 import (
 	"bufio"
-	"bytes"
 	"compress/flate"
 	"fmt"
 	"github.com/golang/snappy"
@@ -70,7 +69,6 @@ const (
 )
 
 type handshakeConfig struct {
-	sniffHeader       []byte
 	protocolVersion   byte
 	conn              net.Conn
 	readBufferSize    int
@@ -158,11 +156,11 @@ func handshake(cfg *handshakeConfig) (readCompressType CompressType, realConn ne
 
 func handshakeServer(cfg *handshakeConfig) (CompressType, net.Conn, error) {
 	conn := cfg.conn
-	readCompressType, err := handshakeRead(conn, cfg.sniffHeader, cfg.protocolVersion)
+	readCompressType, err := handshakeRead(conn, cfg.protocolVersion)
 	if err != nil {
 		return 0, nil, err
 	}
-	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.sniffHeader, cfg.protocolVersion); err != nil {
+	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.protocolVersion); err != nil {
 		return 0, nil, err
 	}
 
@@ -171,10 +169,10 @@ func handshakeServer(cfg *handshakeConfig) (CompressType, net.Conn, error) {
 
 func handshakeClient(cfg *handshakeConfig) (CompressType, net.Conn, error) {
 	conn := cfg.conn
-	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.sniffHeader, cfg.protocolVersion); err != nil {
+	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.protocolVersion); err != nil {
 		return 0, nil, err
 	}
-	readCompressType, err := handshakeRead(conn, cfg.sniffHeader, cfg.protocolVersion)
+	readCompressType, err := handshakeRead(conn, cfg.protocolVersion)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -182,11 +180,7 @@ func handshakeClient(cfg *handshakeConfig) (CompressType, net.Conn, error) {
 	return readCompressType, conn, nil
 }
 
-func handshakeWrite(conn net.Conn, compressType CompressType, sniffHeader []byte, protocolVersion byte) error {
-	if _, err := conn.Write(sniffHeader); err != nil {
-		return fmt.Errorf("cannot write sniffHeader %q: %s", sniffHeader, err)
-	}
-
+func handshakeWrite(conn net.Conn, compressType CompressType, protocolVersion byte) error {
 	var buf [2]byte
 	buf[0] = protocolVersion
 	buf[1] = byte(compressType)
@@ -197,15 +191,7 @@ func handshakeWrite(conn net.Conn, compressType CompressType, sniffHeader []byte
 	return nil
 }
 
-func handshakeRead(conn net.Conn, sniffHeader []byte, protocolVersion byte) (CompressType, error) {
-	sniffBuf := make([]byte, len(sniffHeader))
-	if _, err := io.ReadFull(conn, sniffBuf); err != nil {
-		return 0, fmt.Errorf("cannot read sniffHeader: %s", err)
-	}
-	if !bytes.Equal(sniffBuf, sniffHeader) {
-		return 0, fmt.Errorf("invalid sniffHeader read: %q. Expecting %q", sniffBuf, sniffHeader)
-	}
-
+func handshakeRead(conn net.Conn, protocolVersion byte) (CompressType, error) {
 	var buf [2]byte
 	if _, err := io.ReadFull(conn, buf[:]); err != nil {
 		return 0, fmt.Errorf("cannot read connection header: %s", err)

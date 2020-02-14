@@ -30,12 +30,6 @@ type ResponseReader interface {
 // if a single connection processing consumes 100% of a single CPU core
 // on either multi-core client or server.
 type Client struct {
-	// SniffHeader is the header written to each connection established
-	// to the server.
-	//
-	// It is expected that the server replies with the same header.
-	SniffHeader []byte
-
 	// ProtocolVersion is the version of RequestWriter and ResponseReader.
 	//
 	// The ProtocolVersion must be changed each time RequestWriter
@@ -346,7 +340,6 @@ func (c *Client) worker() {
 
 func (c *Client) serveConn(conn net.Conn) error {
 	cfg := &handshakeConfig{
-		sniffHeader:       c.SniffHeader,
 		protocolVersion:   c.ProtocolVersion,
 		conn:              conn,
 		readBufferSize:    c.ReadBufferSize,
