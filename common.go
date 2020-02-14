@@ -2,11 +2,6 @@ package fastrpc
 
 import (
 	"bufio"
-	"compress/flate"
-	"fmt"
-	"github.com/golang/snappy"
-	"github.com/valyala/fasthttp/stackless"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -68,157 +63,20 @@ const (
 	CompressSnappy = CompressType(2)
 )
 
-type handshakeConfig struct {
-	protocolVersion   byte
-	conn              net.Conn
-	readBufferSize    int
-	writeBufferSize   int
-	writeCompressType CompressType
-	isServer          bool
-}
-
-func newBufioConn(cfg *handshakeConfig) (*bufio.Reader, *bufio.Writer, error) {
-	readCompressType, realConn, err := handshake(cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	r := io.Reader(realConn)
-	switch readCompressType {
-	case CompressNone:
-	case CompressFlate:
-		r = flate.NewReader(r)
-	case CompressSnappy:
-		r = snappy.NewReader(r)
-	default:
-		return nil, nil, fmt.Errorf("unknown read CompressType: %v", readCompressType)
-	}
-	readBufferSize := cfg.readBufferSize
+func newBufioConn(conn net.Conn, readBufferSize, writeBufferSize int) (*bufio.Reader, *bufio.Writer, error) {
 	if readBufferSize <= 0 {
 		readBufferSize = DefaultReadBufferSize
 	}
-	br := bufio.NewReaderSize(r, readBufferSize)
 
-	w := io.Writer(realConn)
-	switch cfg.writeCompressType {
-	case CompressNone:
-	case CompressFlate:
-		sw := stackless.NewWriter(w, func(w io.Writer) stackless.Writer {
-			zw, err := flate.NewWriter(w, flate.DefaultCompression)
-			if err != nil {
-				panic(fmt.Sprintf("BUG: flate.NewWriter(%d) returned non-nil err: %s", flate.DefaultCompression, err))
-			}
-			return zw
-		})
-		w = &writeFlusher{w: sw}
-	case CompressSnappy:
-		// From the docs at https://godoc.org/github.com/golang/snappy#NewWriter :
-		// There is no need to Flush or Close such a Writer,
-		// so don't wrap it into writeFlusher.
-		w = stackless.NewWriter(w, func(w io.Writer) stackless.Writer {
-			return snappy.NewWriter(w)
-		})
-	default:
-		return nil, nil, fmt.Errorf("unknown write CompressType: %v", cfg.writeCompressType)
-	}
-	writeBufferSize := cfg.writeBufferSize
+	br := bufio.NewReaderSize(conn, readBufferSize)
+
 	if writeBufferSize <= 0 {
 		writeBufferSize = DefaultWriteBufferSize
 	}
-	bw := bufio.NewWriterSize(w, writeBufferSize)
+
+	bw := bufio.NewWriterSize(conn, writeBufferSize)
+
 	return br, bw, nil
-}
-
-func handshake(cfg *handshakeConfig) (readCompressType CompressType, realConn net.Conn, err error) {
-	handshakeFunc := handshakeClient
-	if cfg.isServer {
-		handshakeFunc = handshakeServer
-	}
-	deadline := time.Now().Add(3 * time.Second)
-	if err = cfg.conn.SetWriteDeadline(deadline); err != nil {
-		return 0, nil, fmt.Errorf("cannot set write timeout: %s", err)
-	}
-	if err = cfg.conn.SetReadDeadline(deadline); err != nil {
-		return 0, nil, fmt.Errorf("cannot set read timeout: %s", err)
-	}
-	readCompressType, realConn, err = handshakeFunc(cfg)
-	if err != nil {
-		return 0, nil, fmt.Errorf("error in handshake: %s", err)
-	}
-	if err = cfg.conn.SetWriteDeadline(zeroTime); err != nil {
-		return 0, nil, fmt.Errorf("cannot reset write timeout: %s", err)
-	}
-	if err = cfg.conn.SetReadDeadline(zeroTime); err != nil {
-		return 0, nil, fmt.Errorf("cannot reset read timeout: %s", err)
-	}
-	return readCompressType, realConn, err
-}
-
-func handshakeServer(cfg *handshakeConfig) (CompressType, net.Conn, error) {
-	conn := cfg.conn
-	readCompressType, err := handshakeRead(conn, cfg.protocolVersion)
-	if err != nil {
-		return 0, nil, err
-	}
-	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.protocolVersion); err != nil {
-		return 0, nil, err
-	}
-
-	return readCompressType, conn, nil
-}
-
-func handshakeClient(cfg *handshakeConfig) (CompressType, net.Conn, error) {
-	conn := cfg.conn
-	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.protocolVersion); err != nil {
-		return 0, nil, err
-	}
-	readCompressType, err := handshakeRead(conn, cfg.protocolVersion)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	return readCompressType, conn, nil
-}
-
-func handshakeWrite(conn net.Conn, compressType CompressType, protocolVersion byte) error {
-	var buf [2]byte
-	buf[0] = protocolVersion
-	buf[1] = byte(compressType)
-
-	if _, err := conn.Write(buf[:]); err != nil {
-		return fmt.Errorf("cannot write connection header: %s", err)
-	}
-	return nil
-}
-
-func handshakeRead(conn net.Conn, protocolVersion byte) (CompressType, error) {
-	var buf [2]byte
-	if _, err := io.ReadFull(conn, buf[:]); err != nil {
-		return 0, fmt.Errorf("cannot read connection header: %s", err)
-	}
-	if buf[0] != protocolVersion {
-		return 0, fmt.Errorf("server returned unknown protocol version: %d", buf[0])
-	}
-	compressType := CompressType(buf[1])
-
-	return compressType, nil
-}
-
-var zeroTime time.Time
-
-type writeFlusher struct {
-	w stackless.Writer
-}
-
-func (wf *writeFlusher) Write(p []byte) (int, error) {
-	n, err := wf.w.Write(p)
-	if err != nil {
-		return n, err
-	}
-	if err := wf.w.Flush(); err != nil {
-		return 0, err
-	}
-	return n, nil
 }
 
 func getFlushTimer() *time.Timer {

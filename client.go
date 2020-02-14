@@ -30,12 +30,6 @@ type ResponseReader interface {
 // if a single connection processing consumes 100% of a single CPU core
 // on either multi-core client or server.
 type Client struct {
-	// ProtocolVersion is the version of RequestWriter and ResponseReader.
-	//
-	// The ProtocolVersion must be changed each time RequestWriter
-	// or ResponseReader changes the underlying format.
-	ProtocolVersion byte
-
 	// NewResponse must return new response object.
 	NewResponse func() ResponseReader
 
@@ -339,15 +333,7 @@ func (c *Client) worker() {
 }
 
 func (c *Client) serveConn(conn net.Conn) error {
-	cfg := &handshakeConfig{
-		protocolVersion:   c.ProtocolVersion,
-		conn:              conn,
-		readBufferSize:    c.ReadBufferSize,
-		writeBufferSize:   c.WriteBufferSize,
-		writeCompressType: c.CompressType,
-		isServer:          false,
-	}
-	br, bw, err := newBufioConn(cfg)
+	br, bw, err := newBufioConn(conn, c.ReadBufferSize, c.WriteBufferSize)
 	if err != nil {
 		conn.Close()
 		time.Sleep(time.Second)

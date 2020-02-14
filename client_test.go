@@ -146,8 +146,7 @@ func TestClientBrokenServerCheckRequest(t *testing.T) {
 func testClientBrokenServer(t *testing.T, serverConnFunc func(net.Conn) error) {
 	ln := fasthttputil.NewInmemoryListener()
 	c := &Client{
-		ProtocolVersion: 123,
-		NewResponse:     newTestResponse,
+		NewResponse: newTestResponse,
 		Dial: func(addr string) (net.Conn, error) {
 			return ln.Dial()
 		},
@@ -161,21 +160,7 @@ func testClientBrokenServer(t *testing.T, serverConnFunc func(net.Conn) error) {
 			serverStopCh <- err
 			return
 		}
-		cfg := &handshakeConfig{
-			conn:              conn,
-			writeCompressType: c.CompressType,
-			protocolVersion:   c.ProtocolVersion,
-		}
-		readCompressType, realConn, err := handshakeServer(cfg)
-		if err != nil {
-			serverStopCh <- err
-			return
-		}
-		if readCompressType != c.CompressType {
-			serverStopCh <- fmt.Errorf("unexpected read CompressType: %v. Expecting %v", readCompressType, c.CompressType)
-			return
-		}
-		serverStopCh <- serverConnFunc(realConn)
+		serverStopCh <- serverConnFunc(conn)
 	}()
 
 	var req tlv.Request

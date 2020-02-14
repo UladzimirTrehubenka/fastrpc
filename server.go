@@ -32,13 +32,6 @@ type HandlerCtx interface {
 
 // Server accepts rpc requests from Client.
 type Server struct {
-	// ProtocolVersion is the version of HandlerCtx.ReadRequest
-	// and HandlerCtx.WriteResponse.
-	//
-	// The ProtocolVersion must be changed each time HandlerCtx.ReadRequest
-	// or HandlerCtx.WriteResponse changes the underlying format.
-	ProtocolVersion byte
-
 	// NewHandlerCtx must return new HandlerCtx
 	NewHandlerCtx func() HandlerCtx
 
@@ -176,15 +169,7 @@ func (s *Server) Serve(ln net.Listener) error {
 }
 
 func (s *Server) serveConn(conn net.Conn) error {
-	cfg := &handshakeConfig{
-		protocolVersion:   s.ProtocolVersion,
-		conn:              conn,
-		readBufferSize:    s.ReadBufferSize,
-		writeBufferSize:   s.WriteBufferSize,
-		writeCompressType: s.CompressType,
-		isServer:          true,
-	}
-	br, bw, err := newBufioConn(cfg)
+	br, bw, err := newBufioConn(conn, s.ReadBufferSize, s.WriteBufferSize)
 	if err != nil {
 		conn.Close()
 		return err
@@ -221,7 +206,9 @@ func (s *Server) connReader(br *bufio.Reader, conn net.Conn, pendingResponses ch
 	concurrency := s.concurrency()
 	pipelineRequests := s.PipelineRequests
 	readTimeout := s.ReadTimeout
+
 	var lastReadDeadline time.Time
+
 	for {
 		wi := s.acquireWorkItem()
 

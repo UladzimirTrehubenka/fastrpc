@@ -69,11 +69,10 @@ func concurrencyLimitErrorHandler(ctx *tlv.RequestCtx, concurrency int) {
 
 func testServerBrokenClient(t *testing.T, clientConnFunc func(net.Conn) error) {
 	s := &Server{
-		ProtocolVersion: 123,
-		NewHandlerCtx:   newTestHandlerCtx,
-		Handler:         testEchoHandler,
-		Logger:          &nilLogger{},
-		CompressType:    CompressNone,
+		NewHandlerCtx: newTestHandlerCtx,
+		Handler:       testEchoHandler,
+		Logger:        &nilLogger{},
+		CompressType:  CompressNone,
 	}
 	serverStop, ln := newTestServerExt(s)
 
@@ -84,22 +83,7 @@ func testServerBrokenClient(t *testing.T, clientConnFunc func(net.Conn) error) {
 			clientStopCh <- err
 			return
 		}
-
-		cfg := &handshakeConfig{
-			protocolVersion:   s.ProtocolVersion,
-			conn:              conn,
-			writeCompressType: s.CompressType,
-		}
-		readCompressType, realConn, err := handshakeClient(cfg)
-		if err != nil {
-			clientStopCh <- err
-			return
-		}
-		if readCompressType != s.CompressType {
-			clientStopCh <- fmt.Errorf("unexpected read CompressType: %v. Expecting %v", readCompressType, s.CompressType)
-			return
-		}
-		clientStopCh <- clientConnFunc(realConn)
+		clientStopCh <- clientConnFunc(conn)
 	}()
 
 	select {
