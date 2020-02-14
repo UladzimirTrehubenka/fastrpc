@@ -41,6 +41,9 @@ type Client struct {
 	// fasthttp.Dial is used by default.
 	Dial func(addr string) (net.Conn, error)
 
+	Handshake        func(conn net.Conn) (net.Conn, error)
+	HandshakeTimeout time.Duration
+
 	// MaxPendingRequests is the maximum number of pending requests
 	// the client may issue until the server responds to them.
 	//
@@ -100,8 +103,7 @@ var (
 
 	// ErrPendingRequestsOverflow is returned when Client cannot send
 	// more requests to the server due to Client.MaxPendingRequests limit.
-	ErrPendingRequestsOverflow = errors.New("Pending requests overflow. Increase Client.MaxPendingRequests, " +
-		"reduce requests rate or speed up the server")
+	ErrPendingRequestsOverflow = errors.New("pending requests overflowed")
 )
 
 // SendNowait schedules the given request for sending to the server
@@ -323,7 +325,7 @@ func (c *Client) worker() {
 }
 
 func (c *Client) serveConn(conn net.Conn) error {
-	br, bw, err := newBufioConn(conn, c.ReadBufferSize, c.WriteBufferSize)
+	br, bw, err := newBufioConn(conn, c.ReadBufferSize, c.WriteBufferSize, c.Handshake, c.HandshakeTimeout)
 	if err != nil {
 		conn.Close()
 		time.Sleep(time.Second)

@@ -45,6 +45,9 @@ type Server struct {
 	// Otherwise new ctx must be returned.
 	Handler func(ctx HandlerCtx) HandlerCtx
 
+	Handshake        func(conn net.Conn) (net.Conn, error)
+	HandshakeTimeout time.Duration
+
 	// Concurrency is the maximum number of concurrent goroutines
 	// with Server.Handler the server may run.
 	//
@@ -164,7 +167,7 @@ func (s *Server) Serve(ln net.Listener) error {
 }
 
 func (s *Server) serveConn(conn net.Conn) error {
-	br, bw, err := newBufioConn(conn, s.ReadBufferSize, s.WriteBufferSize)
+	br, bw, err := newBufioConn(conn, s.ReadBufferSize, s.WriteBufferSize, s.Handshake, s.HandshakeTimeout)
 	if err != nil {
 		conn.Close()
 		return err

@@ -2,6 +2,7 @@ package fastrpc
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -17,9 +18,10 @@ const (
 	// DefaultConcurrency is the default maximum number of concurrent
 	// Server.Handler goroutines the server may run.
 	DefaultConcurrency = 10000
-)
 
-const (
+	// DefaultHandshakeTimeout is the default timeout before declaring whether or not a handshake has failed.
+	DefaultHandshakeTimeout = 3 * time.Second
+
 	// DefaultReadBufferSize is the default size for read buffers.
 	DefaultReadBufferSize = 64 * 1024
 
@@ -27,7 +29,38 @@ const (
 	DefaultWriteBufferSize = 64 * 1024
 )
 
-func newBufioConn(conn net.Conn, readBufferSize, writeBufferSize int) (*bufio.Reader, *bufio.Writer, error) {
+var zeroTime time.Time
+
+func newBufioConn(conn net.Conn, readBufferSize, writeBufferSize int, handshake func(conn net.Conn) (net.Conn, error), handshakeTimeout time.Duration) (*bufio.Reader, *bufio.Writer, error) {
+	if handshake != nil {
+		var err error
+
+		if handshakeTimeout == 0 {
+			handshakeTimeout = DefaultHandshakeTimeout
+		}
+
+		deadline := time.Now().Add(handshakeTimeout)
+
+		if err = conn.SetWriteDeadline(deadline); err != nil {
+			return nil, nil, fmt.Errorf("cannot set write timeout: %s", err)
+		}
+		if err = conn.SetReadDeadline(deadline); err != nil {
+			return nil, nil, fmt.Errorf("cannot set read timeout: %s", err)
+		}
+
+		conn, err = handshake(conn)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("error in handshake: %s", err)
+		}
+		if err = conn.SetWriteDeadline(zeroTime); err != nil {
+			return nil, nil, fmt.Errorf("cannot reset write timeout: %s", err)
+		}
+		if err = conn.SetReadDeadline(zeroTime); err != nil {
+			return nil, nil, fmt.Errorf("cannot reset read timeout: %s", err)
+		}
+	}
+
 	if readBufferSize <= 0 {
 		readBufferSize = DefaultReadBufferSize
 	}
