@@ -301,8 +301,8 @@ func TestServerConcurrencyLimit(t *testing.T) {
 				resultCh <- err
 				return
 			}
-			if string(resp.B) != "done" {
-				resultCh <- fmt.Errorf("unexpected body: %q. Expecting %q", resp.B, "done")
+			if string(resp.Value()) != "done" {
+				resultCh <- fmt.Errorf("unexpected body: %q. Expecting %q", resp.Value(), "done")
 				return
 			}
 			resultCh <- nil
@@ -327,8 +327,8 @@ func TestServerConcurrencyLimit(t *testing.T) {
 		if err := c.DoDeadline(&req, &resp, time.Now().Add(time.Second)); err != nil {
 			t.Fatalf("unexpected error on iteration %d: %s", i, err)
 		}
-		if string(resp.B) != "too many requests" {
-			t.Fatalf("unexpected response on iteration %d: %q. Expecting %q", i, resp.B, "too many requests")
+		if string(resp.Value()) != "too many requests" {
+			t.Fatalf("unexpected response on iteration %d: %q. Expecting %q", i, resp.Value(), "too many requests")
 		}
 	}
 
@@ -382,8 +382,8 @@ func TestServerClientSendNowait(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("unexpected error in DoDeadline on iteration %d: %s", i, err)
 				}
-				if string(resp.B) != s {
-					return fmt.Errorf("unexpected body on iteration %d: %q. Expecting %q", i, resp.B, s)
+				if string(resp.Value()) != s {
+					return fmt.Errorf("unexpected body on iteration %d: %q. Expecting %q", i, resp.Value(), s)
 				}
 			}
 		}
@@ -529,8 +529,8 @@ func testGetExt(c *Client, iterations int) error {
 		if err != nil {
 			return fmt.Errorf("unexpected error on iteration %d: %s", i, err)
 		}
-		if string(resp.B) != s {
-			return fmt.Errorf("unexpected body on iteration %d: %q. Expecting %q", i, resp.B, s)
+		if string(resp.Value()) != s {
+			return fmt.Errorf("unexpected body on iteration %d: %q. Expecting %q", i, resp.Value(), s)
 		}
 	}
 	return nil
@@ -548,8 +548,8 @@ func testSleep(c *Client) error {
 		if err != nil {
 			return fmt.Errorf("unexpected error on iteration %d: %s", i, err)
 		}
-		if !bytes.HasPrefix(resp.B, expectedBodyPrefix) {
-			return fmt.Errorf("unexpected body prefix on iteration %d: %q. Expecting %q", i, resp.B, expectedBodyPrefix)
+		if !bytes.HasPrefix(resp.Value(), expectedBodyPrefix) {
+			return fmt.Errorf("unexpected body prefix on iteration %d: %q. Expecting %q", i, resp.Value(), expectedBodyPrefix)
 		}
 	}
 	return nil
@@ -584,8 +584,8 @@ func testNewCtx(c *Client) error {
 		if err != nil {
 			return fmt.Errorf("unexpected error on iteration %d: %s", i, err)
 		}
-		if string(resp.B) != "new ctx!" {
-			return fmt.Errorf("unexpected body on iteration %d: %q. Expecting %q", i, resp.B, "new ctx!")
+		if string(resp.Value()) != "new ctx!" {
+			return fmt.Errorf("unexpected body on iteration %d: %q. Expecting %q", i, resp.Value(), "new ctx!")
 		}
 	}
 	return nil

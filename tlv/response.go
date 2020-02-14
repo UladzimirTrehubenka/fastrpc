@@ -8,13 +8,17 @@ import (
 
 // Response is a TLV response.
 type Response struct {
-	B      []byte
+	value  []byte
 	header [4]byte
 }
 
 // Reset resets the given response.
 func (r *Response) Reset() {
-	r.B = r.B[:0]
+	r.value = r.value[:0]
+}
+
+func (r *Response) Value() []byte {
+	return r.value
 }
 
 // Write appends p to the response value.
@@ -27,21 +31,21 @@ func (r *Response) Write(p []byte) (int, error) {
 
 // Append appends p to the response value.
 func (r *Response) Append(p []byte) {
-	r.B = append(r.B, p...)
+	r.value = append(r.value, p...)
 }
 
 // Swap swaps the given value with the response's value.
 //
 // It is forbidden accessing the swapped value after the call.
 func (r *Response) Swap(value []byte) []byte {
-	v := r.B
-	r.B = value
+	v := r.value
+	r.value = value
 	return v
 }
 
 // WriteResponse writes the response to bw.
 func (r *Response) WriteResponse(bw *bufio.Writer) error {
-	if err := writeBytes(bw, r.B, r.header[:]); err != nil {
+	if err := writeBytes(bw, r.value, r.header[:]); err != nil {
 		return fmt.Errorf("cannot write response value: %s", err)
 	}
 	return nil
@@ -52,7 +56,7 @@ func (r *Response) WriteResponse(bw *bufio.Writer) error {
 // It implements fastrpc.ReadResponse.
 func (r *Response) ReadResponse(br *bufio.Reader) error {
 	var err error
-	r.B, err = readBytes(br, r.B[:0], r.header[:])
+	r.value, err = readBytes(br, r.value[:0], r.header[:])
 	if err != nil {
 		return fmt.Errorf("cannot read request value: %s", err)
 	}
