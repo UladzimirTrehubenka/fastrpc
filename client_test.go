@@ -147,7 +147,7 @@ func testClientBrokenServer(t *testing.T, serverConnFunc func(net.Conn) error) {
 	ln := fasthttputil.NewInmemoryListener()
 	c := &Client{
 		ProtocolVersion: 123,
-		SniffHeader:     "xxxxsss",
+		SniffHeader:     []byte("xxxxsss"),
 		NewResponse:     newTestResponse,
 		Dial: func(addr string) (net.Conn, error) {
 			return ln.Dial()

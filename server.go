@@ -35,7 +35,7 @@ type Server struct {
 	// SniffHeader is the header read from each client connection.
 	//
 	// The server sends the same header to each client.
-	SniffHeader string
+	SniffHeader []byte
 
 	// ProtocolVersion is the version of HandlerCtx.ReadRequest
 	// and HandlerCtx.WriteResponse.
@@ -182,7 +182,7 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) serveConn(conn net.Conn) error {
 	cfg := &handshakeConfig{
-		sniffHeader:       []byte(s.SniffHeader),
+		sniffHeader:       s.SniffHeader,
 		protocolVersion:   s.ProtocolVersion,
 		conn:              conn,
 		readBufferSize:    s.ReadBufferSize,

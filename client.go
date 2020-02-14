@@ -34,7 +34,7 @@ type Client struct {
 	// to the server.
 	//
 	// It is expected that the server replies with the same header.
-	SniffHeader string
+	SniffHeader []byte
 
 	// ProtocolVersion is the version of RequestWriter and ResponseReader.
 	//
@@ -346,7 +346,7 @@ func (c *Client) worker() {
 
 func (c *Client) serveConn(conn net.Conn) error {
 	cfg := &handshakeConfig{
-		sniffHeader:       []byte(c.SniffHeader),
+		sniffHeader:       c.SniffHeader,
 		protocolVersion:   c.ProtocolVersion,
 		conn:              conn,
 		readBufferSize:    c.ReadBufferSize,
