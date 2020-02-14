@@ -10,83 +10,71 @@ import (
 )
 
 func BenchmarkEndToEndNoDelay1(b *testing.B) {
-	benchmarkEndToEnd(b, 1, 0, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1, 0, CompressNone, false)
 }
 
 func BenchmarkEndToEndNoDelay10(b *testing.B) {
-	benchmarkEndToEnd(b, 10, 0, CompressNone, false, false)
+	benchmarkEndToEnd(b, 10, 0, CompressNone, false)
 }
 
 func BenchmarkEndToEndNoDelay100(b *testing.B) {
-	benchmarkEndToEnd(b, 100, 0, CompressNone, false, false)
+	benchmarkEndToEnd(b, 100, 0, CompressNone, false)
 }
 
 func BenchmarkEndToEndNoDelay1000(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 0, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1000, 0, CompressNone, false)
 }
 
 func BenchmarkEndToEndNoDelay10K(b *testing.B) {
-	benchmarkEndToEnd(b, 10000, 0, CompressNone, false, false)
+	benchmarkEndToEnd(b, 10000, 0, CompressNone, false)
 }
 
 func BenchmarkEndToEndDelay1ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressNone, false)
 }
 
 func BenchmarkEndToEndDelay2ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 2*time.Millisecond, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1000, 2*time.Millisecond, CompressNone, false)
 }
 
 func BenchmarkEndToEndDelay4ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 4*time.Millisecond, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1000, 4*time.Millisecond, CompressNone, false)
 }
 
 func BenchmarkEndToEndDelay8ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 8*time.Millisecond, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1000, 8*time.Millisecond, CompressNone, false)
 }
 
 func BenchmarkEndToEndDelay16ms(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 16*time.Millisecond, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1000, 16*time.Millisecond, CompressNone, false)
 }
 
 func BenchmarkEndToEndCompressNone(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressNone, false, false)
+	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressNone, false)
 }
 
 func BenchmarkEndToEndCompressFlate(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressFlate, false, false)
+	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressFlate, false)
 }
 
 func BenchmarkEndToEndCompressSnappy(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressSnappy, false, false)
-}
-
-func BenchmarkEndToEndTLSCompressNone(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressNone, true, false)
-}
-
-func BenchmarkEndToEndTLSCompressFlate(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressFlate, true, false)
-}
-
-func BenchmarkEndToEndTLSCompressSnappy(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressSnappy, true, false)
+	benchmarkEndToEnd(b, 1000, time.Millisecond, CompressSnappy, false)
 }
 
 func BenchmarkEndToEndPipeline1(b *testing.B) {
-	benchmarkEndToEnd(b, 1, 0, CompressNone, false, true)
+	benchmarkEndToEnd(b, 1, 0, CompressNone, true)
 }
 
 func BenchmarkEndToEndPipeline10(b *testing.B) {
-	benchmarkEndToEnd(b, 10, 0, CompressNone, false, true)
+	benchmarkEndToEnd(b, 10, 0, CompressNone, true)
 }
 
 func BenchmarkEndToEndPipeline100(b *testing.B) {
-	benchmarkEndToEnd(b, 100, 0, CompressNone, false, true)
+	benchmarkEndToEnd(b, 100, 0, CompressNone, true)
 }
 
 func BenchmarkEndToEndPipeline1000(b *testing.B) {
-	benchmarkEndToEnd(b, 1000, 0, CompressNone, false, true)
+	benchmarkEndToEnd(b, 1000, 0, CompressNone, true)
 }
 
 func BenchmarkSendNowait(b *testing.B) {
@@ -151,7 +139,7 @@ func BenchmarkSendNowait(b *testing.B) {
 	}
 }
 
-func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, compressType CompressType, isTLS, pipelineRequests bool) {
+func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, compressType CompressType, pipelineRequests bool) {
 	var serverBatchDelay time.Duration
 	if batchDelay > 0 {
 		serverBatchDelay = 100 * time.Microsecond
