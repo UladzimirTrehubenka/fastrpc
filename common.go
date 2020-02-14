@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/flate"
-	"crypto/tls"
 	"fmt"
 	"github.com/golang/snappy"
 	"github.com/valyala/fasthttp/stackless"
@@ -77,12 +76,10 @@ type handshakeConfig struct {
 	readBufferSize    int
 	writeBufferSize   int
 	writeCompressType CompressType
-	tlsConfig         *tls.Config
 	isServer          bool
 }
 
 func newBufioConn(cfg *handshakeConfig) (*bufio.Reader, *bufio.Writer, error) {
-
 	readCompressType, realConn, err := handshake(cfg)
 	if err != nil {
 		return nil, nil, err
@@ -161,89 +158,64 @@ func handshake(cfg *handshakeConfig) (readCompressType CompressType, realConn ne
 
 func handshakeServer(cfg *handshakeConfig) (CompressType, net.Conn, error) {
 	conn := cfg.conn
-	readCompressType, isTLS, err := handshakeRead(conn, cfg.sniffHeader, cfg.protocolVersion)
+	readCompressType, err := handshakeRead(conn, cfg.sniffHeader, cfg.protocolVersion)
 	if err != nil {
 		return 0, nil, err
 	}
-	if isTLS && cfg.tlsConfig == nil {
-		handshakeWrite(conn, cfg.writeCompressType, false, cfg.sniffHeader, cfg.protocolVersion)
-		return 0, nil, fmt.Errorf("Cannot serve encrypted client connection. " +
-			"Set Server.TLSConfig for supporting encrypted connections")
-	}
-	if err := handshakeWrite(conn, cfg.writeCompressType, isTLS, cfg.sniffHeader, cfg.protocolVersion); err != nil {
+	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.sniffHeader, cfg.protocolVersion); err != nil {
 		return 0, nil, err
 	}
-	if isTLS {
-		tlsConn := tls.Server(conn, cfg.tlsConfig)
-		if err := tlsConn.Handshake(); err != nil {
-			return 0, nil, fmt.Errorf("error in TLS handshake: %s", err)
-		}
-		conn = tlsConn
-	}
+
 	return readCompressType, conn, nil
 }
 
 func handshakeClient(cfg *handshakeConfig) (CompressType, net.Conn, error) {
 	conn := cfg.conn
-	isTLS := cfg.tlsConfig != nil
-	if err := handshakeWrite(conn, cfg.writeCompressType, isTLS, cfg.sniffHeader, cfg.protocolVersion); err != nil {
+	if err := handshakeWrite(conn, cfg.writeCompressType, cfg.sniffHeader, cfg.protocolVersion); err != nil {
 		return 0, nil, err
 	}
-	readCompressType, isTLSCheck, err := handshakeRead(conn, cfg.sniffHeader, cfg.protocolVersion)
+	readCompressType, err := handshakeRead(conn, cfg.sniffHeader, cfg.protocolVersion)
 	if err != nil {
 		return 0, nil, err
 	}
-	if isTLS {
-		if !isTLSCheck {
-			return 0, nil, fmt.Errorf("Server doesn't support encrypted connections. " +
-				"Set Server.TLSConfig for enabling encrypted connections on the server")
-		}
-		tlsConn := tls.Client(conn, cfg.tlsConfig)
-		if err := tlsConn.Handshake(); err != nil {
-			return 0, nil, fmt.Errorf("error in TLS handshake: %s", err)
-		}
-		conn = tlsConn
-	}
+
 	return readCompressType, conn, nil
 }
 
-func handshakeWrite(conn net.Conn, compressType CompressType, isTLS bool, sniffHeader []byte, protocolVersion byte) error {
+func handshakeWrite(conn net.Conn, compressType CompressType, sniffHeader []byte, protocolVersion byte) error {
 	if _, err := conn.Write(sniffHeader); err != nil {
 		return fmt.Errorf("cannot write sniffHeader %q: %s", sniffHeader, err)
 	}
 
-	var buf [3]byte
+	var buf [2]byte
 	buf[0] = protocolVersion
 	buf[1] = byte(compressType)
-	if isTLS {
-		buf[2] = 1
-	}
+
 	if _, err := conn.Write(buf[:]); err != nil {
 		return fmt.Errorf("cannot write connection header: %s", err)
 	}
 	return nil
 }
 
-func handshakeRead(conn net.Conn, sniffHeader []byte, protocolVersion byte) (CompressType, bool, error) {
+func handshakeRead(conn net.Conn, sniffHeader []byte, protocolVersion byte) (CompressType, error) {
 	sniffBuf := make([]byte, len(sniffHeader))
 	if _, err := io.ReadFull(conn, sniffBuf); err != nil {
-		return 0, false, fmt.Errorf("cannot read sniffHeader: %s", err)
+		return 0, fmt.Errorf("cannot read sniffHeader: %s", err)
 	}
 	if !bytes.Equal(sniffBuf, sniffHeader) {
-		return 0, false, fmt.Errorf("invalid sniffHeader read: %q. Expecting %q", sniffBuf, sniffHeader)
+		return 0, fmt.Errorf("invalid sniffHeader read: %q. Expecting %q", sniffBuf, sniffHeader)
 	}
 
-	var buf [3]byte
+	var buf [2]byte
 	if _, err := io.ReadFull(conn, buf[:]); err != nil {
-		return 0, false, fmt.Errorf("cannot read connection header: %s", err)
+		return 0, fmt.Errorf("cannot read connection header: %s", err)
 	}
 	if buf[0] != protocolVersion {
-		return 0, false, fmt.Errorf("server returned unknown protocol version: %d", buf[0])
+		return 0, fmt.Errorf("server returned unknown protocol version: %d", buf[0])
 	}
 	compressType := CompressType(buf[1])
-	isTLS := buf[2] != 0
 
-	return compressType, isTLS, nil
+	return compressType, nil
 }
 
 var zeroTime time.Time

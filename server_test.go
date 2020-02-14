@@ -3,10 +3,9 @@ package fastrpc
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"fmt"
+	"github.com/iwasaki-kenta/fastrpc/tlv"
 	"github.com/valyala/fasthttp/fasthttputil"
-	"github.com/valyala/fastrpc/tlv"
 	"math/rand"
 	"net"
 	"strings"
@@ -119,85 +118,14 @@ func testServerBrokenClient(t *testing.T, clientConnFunc func(net.Conn) error) {
 	}
 }
 
-func TestServerWithoutTLS(t *testing.T) {
-	s := &Server{
-		NewHandlerCtx: newTestHandlerCtx,
-		Handler:       testEchoHandler,
-		Logger:        &nilLogger{},
-	}
-	serverStop, c := newTestServerClientExt(s)
-	c.TLSConfig = &tls.Config{
-		InsecureSkipVerify: true,
-	}
-
-	var req tlv.Request
-	var resp tlv.Response
-
-	for i := 0; i < 10; i++ {
-		req.SwapValue([]byte("foobar"))
-		err := c.DoDeadline(&req, &resp, time.Now().Add(time.Millisecond))
-		if err == nil {
-			t.Fatalf("expecting non-nil error")
-		}
-	}
-
-	if err := serverStop(); err != nil {
-		t.Fatalf("cannot shutdown server: %s", err)
-	}
-}
-
 func TestServerTLSUnencryptedConn(t *testing.T) {
-	tlsConfig := newTestServerTLSConfig()
 	s := &Server{
 		NewHandlerCtx: newTestHandlerCtx,
 		Handler:       testEchoHandler,
-		TLSConfig:     tlsConfig,
 	}
 	serverStop, c := newTestServerClientExt(s)
 
 	if err := testGet(c); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	if err := serverStop(); err != nil {
-		t.Fatalf("cannot shutdown server: %s", err)
-	}
-}
-
-func TestServerTLSSerial(t *testing.T) {
-	tlsConfig := newTestServerTLSConfig()
-	s := &Server{
-		NewHandlerCtx: newTestHandlerCtx,
-		Handler:       testEchoHandler,
-		TLSConfig:     tlsConfig,
-	}
-	serverStop, c := newTestServerClientExt(s)
-	c.TLSConfig = &tls.Config{
-		InsecureSkipVerify: true,
-	}
-
-	if err := testGet(c); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-
-	if err := serverStop(); err != nil {
-		t.Fatalf("cannot shutdown server: %s", err)
-	}
-}
-
-func TestServerTLSConcurrent(t *testing.T) {
-	tlsConfig := newTestServerTLSConfig()
-	s := &Server{
-		NewHandlerCtx: newTestHandlerCtx,
-		Handler:       testEchoHandler,
-		TLSConfig:     tlsConfig,
-	}
-	serverStop, c := newTestServerClientExt(s)
-	c.TLSConfig = &tls.Config{
-		InsecureSkipVerify: true,
-	}
-
-	if err := testServerClientConcurrent(func() error { return testGet(c) }); err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
 
@@ -461,7 +389,7 @@ func TestServerConcurrencyLimit(t *testing.T) {
 		go func() {
 			var req tlv.Request
 			var resp tlv.Response
-			req.SetName("foobar")
+			req.SetOpcode(42)
 			if err := c.DoDeadline(&req, &resp, time.Now().Add(time.Hour)); err != nil {
 				resultCh <- err
 				return
@@ -826,19 +754,6 @@ func testSleepHandler(ctxv HandlerCtx) HandlerCtx {
 	ctx := ctxv.(*tlv.RequestCtx)
 	ctx.Write([]byte(s))
 	return ctx
-}
-
-func newTestServerTLSConfig() *tls.Config {
-	tlsCertFile := "./ssl-cert-snakeoil.pem"
-	tlsKeyFile := "./ssl-cert-snakeoil.key"
-	cert, err := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile)
-	if err != nil {
-		panic(fmt.Sprintf("cannot load TLS key pair from certFile=%q and keyFile=%q: %s", tlsCertFile, tlsKeyFile, err))
-	}
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-	}
-	return tlsConfig
 }
 
 func acquireTestRequest() *tlv.Request {

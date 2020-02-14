@@ -8,15 +8,17 @@ import (
 
 const maxBytesSize = 1024 * 1024
 
-func writeBytes(bw *bufio.Writer, b, sizeBuf []byte) error {
+func writeBytes(bw *bufio.Writer, b, header []byte) error {
 	size := len(b)
 	if size > maxBytesSize {
 		return fmt.Errorf("too big size=%d. Must not exceed %d", size, maxBytesSize)
 	}
-	buf := appendUint32(sizeBuf[:0], uint32(size))
-	_, err := bw.Write(buf)
+
+	appendUint32(header[:0], uint32(size))
+
+	_, err := bw.Write(header)
 	if err != nil {
-		return fmt.Errorf("cannot write size: %s", err)
+		return fmt.Errorf("cannot write header: %s", err)
 	}
 	_, err = bw.Write(b)
 	if err != nil {
@@ -25,12 +27,12 @@ func writeBytes(bw *bufio.Writer, b, sizeBuf []byte) error {
 	return nil
 }
 
-func readBytes(br *bufio.Reader, b, sizeBuf []byte) ([]byte, error) {
-	_, err := io.ReadFull(br, sizeBuf)
+func readBytes(br *bufio.Reader, b, header []byte) ([]byte, error) {
+	_, err := io.ReadFull(br, header)
 	if err != nil {
-		return b, fmt.Errorf("cannot read size: %s", err)
+		return b, fmt.Errorf("cannot read header: %s", err)
 	}
-	size := int(bytes2Uint32(sizeBuf))
+	size := int(bytes2Uint32(header))
 	if size > maxBytesSize {
 		return b, fmt.Errorf("too big size=%d. Must not exceed %d", size, maxBytesSize)
 	}

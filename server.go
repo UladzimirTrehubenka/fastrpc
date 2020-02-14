@@ -2,7 +2,6 @@ package fastrpc
 
 import (
 	"bufio"
-	"crypto/tls"
 	"fmt"
 	"github.com/valyala/fasthttp"
 	"io"
@@ -68,15 +67,6 @@ type Server struct {
 	//
 	// DefaultConcurrency is used by default.
 	Concurrency int
-
-	// TLSConfig is TLS (aka SSL) config used for accepting encrypted
-	// client connections.
-	//
-	// Encrypted connections may be used for transferring sensitive
-	// information over untrusted networks.
-	//
-	// By default server accepts only unencrypted connections.
-	TLSConfig *tls.Config
 
 	// MaxBatchDelay is the maximum duration before ready responses
 	// are sent to the client.
@@ -198,7 +188,6 @@ func (s *Server) serveConn(conn net.Conn) error {
 		readBufferSize:    s.ReadBufferSize,
 		writeBufferSize:   s.WriteBufferSize,
 		writeCompressType: s.CompressType,
-		tlsConfig:         s.TLSConfig,
 		isServer:          true,
 	}
 	br, bw, err := newBufioConn(cfg)

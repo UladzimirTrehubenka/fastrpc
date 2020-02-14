@@ -2,7 +2,6 @@ package fastrpc
 
 import (
 	"bufio"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/valyala/fasthttp"
@@ -58,15 +57,6 @@ type Client struct {
 	//
 	// fasthttp.Dial is used by default.
 	Dial func(addr string) (net.Conn, error)
-
-	// TLSConfig is TLS (aka SSL) config used for establishing encrypted
-	// connection to the server.
-	//
-	// Encrypted connections may be used for transferring sensitive
-	// information over untrusted networks.
-	//
-	// By default connection to the server isn't encrypted.
-	TLSConfig *tls.Config
 
 	// MaxPendingRequests is the maximum number of pending requests
 	// the client may issue until the server responds to them.
@@ -362,7 +352,6 @@ func (c *Client) serveConn(conn net.Conn) error {
 		readBufferSize:    c.ReadBufferSize,
 		writeBufferSize:   c.WriteBufferSize,
 		writeCompressType: c.CompressType,
-		tlsConfig:         c.TLSConfig,
 		isServer:          false,
 	}
 	br, bw, err := newBufioConn(cfg)

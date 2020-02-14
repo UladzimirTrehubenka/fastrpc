@@ -3,8 +3,8 @@ package fastrpc
 import (
 	"bufio"
 	"fmt"
+	"github.com/iwasaki-kenta/fastrpc/tlv"
 	"github.com/valyala/fasthttp/fasthttputil"
-	"github.com/valyala/fastrpc/tlv"
 	"io"
 	"net"
 	"strings"

@@ -8,9 +8,8 @@ import (
 
 // Response is a TLV response.
 type Response struct {
-	value []byte
-
-	sizeBuf [4]byte
+	value  []byte
+	header [4]byte
 }
 
 // Reset resets the given response.
@@ -50,7 +49,7 @@ func (resp *Response) Value() []byte {
 
 // WriteResponse writes the response to bw.
 func (resp *Response) WriteResponse(bw *bufio.Writer) error {
-	if err := writeBytes(bw, resp.value, resp.sizeBuf[:]); err != nil {
+	if err := writeBytes(bw, resp.value, resp.header[:]); err != nil {
 		return fmt.Errorf("cannot write response value: %s", err)
 	}
 	return nil
@@ -61,7 +60,7 @@ func (resp *Response) WriteResponse(bw *bufio.Writer) error {
 // It implements fastrpc.ReadResponse.
 func (resp *Response) ReadResponse(br *bufio.Reader) error {
 	var err error
-	resp.value, err = readBytes(br, resp.value[:0], resp.sizeBuf[:])
+	resp.value, err = readBytes(br, resp.value[:0], resp.header[:])
 	if err != nil {
 		return fmt.Errorf("cannot read request value: %s", err)
 	}

@@ -2,8 +2,7 @@ package fastrpc
 
 import (
 	"bytes"
-	"crypto/tls"
-	"github.com/valyala/fastrpc/tlv"
+	"github.com/iwasaki-kenta/fastrpc/tlv"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -153,10 +152,6 @@ func BenchmarkSendNowait(b *testing.B) {
 }
 
 func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, compressType CompressType, isTLS, pipelineRequests bool) {
-	var tlsConfig *tls.Config
-	if isTLS {
-		tlsConfig = newTestServerTLSConfig()
-	}
 	var serverBatchDelay time.Duration
 	if batchDelay > 0 {
 		serverBatchDelay = 100 * time.Microsecond
@@ -175,7 +170,6 @@ func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, 
 		Concurrency:      parallelism * runtime.NumCPU(),
 		MaxBatchDelay:    serverBatchDelay,
 		CompressType:     compressType,
-		TLSConfig:        tlsConfig,
 		PipelineRequests: pipelineRequests,
 	}
 	serverStop, ln := newTestServerExt(s)
@@ -186,11 +180,6 @@ func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, 
 		c.MaxPendingRequests = s.Concurrency
 		c.MaxBatchDelay = batchDelay
 		c.CompressType = compressType
-		if isTLS {
-			c.TLSConfig = &tls.Config{
-				InsecureSkipVerify: true,
-			}
-		}
 		cc = append(cc, c)
 	}
 	var clientIdx uint32
