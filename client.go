@@ -174,6 +174,13 @@ func (c *Client) DoDeadline(req RequestWriter, resp ResponseReader, deadline tim
 	return <-wi.done
 }
 
+func (c *Client) Conn() net.Conn {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	return c.conn
+}
+
 func (c *Client) enqueueWorkItem(wi *clientWorkItem) error {
 	select {
 	case c.pendingRequests <- wi:
