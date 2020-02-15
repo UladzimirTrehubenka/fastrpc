@@ -84,6 +84,9 @@ type Client struct {
 	// requests is reached.
 	PrioritizeNewRequests bool
 
+	OnMessageSent func(conn net.Conn)
+	OnMessageRecv func(conn net.Conn)
+
 	once sync.Once
 
 	lastErrMu sync.Mutex
@@ -451,6 +454,11 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 				if err := bw.Flush(); err != nil {
 					return fmt.Errorf("cannot flush requests data to the server: %w", err)
 				}
+
+				if c.OnMessageSent != nil {
+					c.OnMessageSent(conn)
+				}
+
 				flushCh = nil
 				continue
 			}
@@ -578,6 +586,10 @@ func (c *Client) connReader(br *bufio.Reader, conn net.Conn) error {
 				panic("BUG: clientWorkItem.resp must be non-nil")
 			}
 			wi.done <- nil
+		}
+
+		if c.OnMessageRecv != nil {
+			c.OnMessageRecv(conn)
 		}
 	}
 }
