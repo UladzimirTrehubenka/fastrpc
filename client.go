@@ -137,7 +137,7 @@ func (c *Client) SendNowait(req RequestWriter, releaseReq func(req RequestWriter
 	wi := acquireClientWorkItem()
 	wi.req = req
 	wi.releaseReq = releaseReq
-	wi.deadline = coarseTimeNow().Add(10 * time.Second)
+	wi.deadline = coarseTimeNow().Add(c.WriteTimeout)
 	if err := c.enqueueWorkItem(wi); err != nil {
 		releaseClientWorkItem(wi)
 		return false
