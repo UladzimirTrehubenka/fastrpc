@@ -86,15 +86,22 @@ type Client struct {
 
 	once sync.Once
 
-	lastErrLock sync.Mutex
-	lastErr     error
+	lastErrMu sync.Mutex
+	lastErr   error
 
 	pendingRequests chan *clientWorkItem
 
-	pendingResponses     map[uint32]*clientWorkItem
-	pendingResponsesLock sync.Mutex
+	pendingResponses   map[uint32]*clientWorkItem
+	pendingResponsesMu sync.Mutex
 
 	pendingRequestsCount uint32
+
+	stop     chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup
+
+	conn   net.Conn
+	connMu sync.Mutex
 }
 
 var (
@@ -158,7 +165,6 @@ func (c *Client) DoDeadline(req RequestWriter, resp ResponseReader, deadline tim
 	wi.deadline = deadline
 
 	if err := c.enqueueWorkItem(wi); err != nil {
-		releaseClientWorkItem(wi)
 		return c.getError(err)
 	}
 
@@ -198,6 +204,22 @@ func (c *Client) maxPendingRequests() int {
 	return maxPendingRequests
 }
 
+func (c *Client) Close() {
+	c.connMu.Lock()
+	conn := c.conn
+	c.connMu.Unlock()
+
+	c.stopOnce.Do(func() {
+		if conn != nil {
+			conn.Close()
+		}
+
+		close(c.stop)
+	})
+
+	c.wg.Wait()
+}
+
 func (c *Client) init() {
 	if c.NewResponse == nil {
 		panic("BUG: Client.NewResponse cannot be nil")
@@ -207,27 +229,37 @@ func (c *Client) init() {
 	c.pendingRequests = make(chan *clientWorkItem, n)
 	c.pendingResponses = make(map[uint32]*clientWorkItem, n)
 
-	go func() {
-		sleepDuration := 10 * time.Millisecond
-		for {
-			time.Sleep(sleepDuration)
-			ok1 := c.unblockStaleRequests()
-			ok2 := c.unblockStaleResponses()
-			if ok1 || ok2 {
-				sleepDuration = time.Duration(0.7 * float64(sleepDuration))
-				if sleepDuration < 10*time.Millisecond {
-					sleepDuration = 10 * time.Millisecond
-				}
-			} else {
-				sleepDuration = time.Duration(1.5 * float64(sleepDuration))
-				if sleepDuration > time.Second {
-					sleepDuration = time.Second
-				}
+	c.stop = make(chan struct{})
+	c.wg.Add(2)
+
+	go c.unblockStaleItems()
+	go c.worker()
+}
+
+func (c *Client) unblockStaleItems() {
+	defer c.wg.Done()
+
+	sleepDuration := 10 * time.Millisecond
+
+	for {
+		select {
+		case <-c.stop:
+			return
+		case <-time.After(sleepDuration):
+		}
+
+		if c.unblockStaleRequests() || c.unblockStaleResponses() {
+			sleepDuration = time.Duration(0.7 * float64(sleepDuration))
+			if sleepDuration < 10*time.Millisecond {
+				sleepDuration = 10 * time.Millisecond
+			}
+		} else {
+			sleepDuration = time.Duration(1.5 * float64(sleepDuration))
+			if sleepDuration > time.Second {
+				sleepDuration = time.Second
 			}
 		}
-	}()
-
-	go c.worker()
+	}
 }
 
 func (c *Client) unblockStaleRequests() bool {
@@ -255,8 +287,8 @@ func (c *Client) unblockStaleRequests() bool {
 func (c *Client) unblockStaleResponses() bool {
 	now, unblocked := time.Now(), false
 
-	c.pendingResponsesLock.Lock()
-	defer c.pendingResponsesLock.Unlock()
+	c.pendingResponsesMu.Lock()
+	defer c.pendingResponsesMu.Unlock()
 
 	for nonce, wi := range c.pendingResponses {
 		if now.After(wi.deadline) {
@@ -286,23 +318,42 @@ func (c *Client) decPendingRequests() {
 }
 
 func (c *Client) worker() {
+	defer c.wg.Done()
+
 	dial := c.Dial
 	if dial == nil {
 		dial = fasthttp.Dial
 	}
+
 	for {
-		// Wait for the first request before dialing the server.
-		wi := <-c.pendingRequests
+		var wi *clientWorkItem
+
+		select {
+		case <-c.stop:
+			return
+		case wi = <-c.pendingRequests:
+		}
+
 		if err := c.enqueueWorkItem(wi); err != nil {
 			c.doneError(wi, err)
 		}
 
 		conn, err := dial(c.Addr)
 		if err != nil {
-			c.setLastError(fmt.Errorf("cannot connect to %q: %s", c.Addr, err))
-			time.Sleep(time.Second)
+			c.setLastError(fmt.Errorf("cannot connect to %q: %w", c.Addr, err))
+
+			select {
+			case <-c.stop:
+				return
+			case <-time.After(1 * time.Second):
+			}
+
 			continue
 		}
+
+		c.connMu.Lock()
+		c.conn = realConn
+		c.connMu.Unlock()
 
 		laddr := conn.LocalAddr().String()
 		raddr := conn.RemoteAddr().String()
@@ -312,15 +363,15 @@ func (c *Client) worker() {
 		if err == nil {
 			c.setLastError(fmt.Errorf("%s<->%s: connection closed by server", laddr, raddr))
 		} else {
-			c.setLastError(fmt.Errorf("%s<->%s: %s", laddr, raddr, err))
+			c.setLastError(fmt.Errorf("%s<->%s: %w", laddr, raddr, err))
 		}
 
-		c.pendingResponsesLock.Lock()
+		c.pendingResponsesMu.Lock()
 		for nonce, wi := range c.pendingResponses {
 			c.doneError(wi, nil)
 			delete(c.pendingResponses, nonce)
 		}
-		c.pendingResponsesLock.Unlock()
+		c.pendingResponsesMu.Unlock()
 	}
 }
 
@@ -328,30 +379,37 @@ func (c *Client) serveConn(conn net.Conn) error {
 	realConn, br, bw, err := newBufioConn(conn, c.ReadBufferSize, c.WriteBufferSize, c.Handshake, c.HandshakeTimeout)
 	if err != nil {
 		conn.Close()
-		time.Sleep(time.Second)
+
+		select {
+		case <-c.stop:
+		case <-time.After(1 * time.Second):
+		}
+
 		return err
 	}
 
-	conn = realConn
+	c.connMu.Lock()
+	c.conn = realConn
+	c.connMu.Unlock()
 
 	readerDone := make(chan error, 1)
 	go func() {
-		readerDone <- c.connReader(br, conn)
+		readerDone <- c.connReader(br, realConn)
 	}()
 
 	writerDone := make(chan error, 1)
 	stopWriterCh := make(chan struct{})
 	go func() {
-		writerDone <- c.connWriter(bw, conn, stopWriterCh)
+		writerDone <- c.connWriter(bw, realConn, stopWriterCh)
 	}()
 
 	select {
 	case err = <-readerDone:
 		close(stopWriterCh)
-		conn.Close()
+		realConn.Close()
 		<-writerDone
 	case err = <-writerDone:
-		conn.Close()
+		realConn.Close()
 		<-readerDone
 	}
 
@@ -391,7 +449,7 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 				return nil
 			case <-flushCh:
 				if err := bw.Flush(); err != nil {
-					return fmt.Errorf("cannot flush requests data to the server: %s", err)
+					return fmt.Errorf("cannot flush requests data to the server: %w", err)
 				}
 				flushCh = nil
 				continue
@@ -414,14 +472,9 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 		}
 
 		if writeTimeout > 0 {
-			// Optimization: update write deadline only if more than 25%
-			// of the last write deadline exceeded.
-			// See https://github.com/golang/go/issues/15133 for details.
 			if t.Sub(lastWriteDeadline) > (writeTimeout >> 2) {
 				if err := conn.SetWriteDeadline(t.Add(writeTimeout)); err != nil {
-					// do not panic here, since the error may
-					// indicate that the connection is already closed
-					err = fmt.Errorf("cannot update write deadline: %s", err)
+					err = fmt.Errorf("cannot update write deadline: %w", err)
 					c.doneError(wi, err)
 					return err
 				}
@@ -431,30 +484,29 @@ func (c *Client) connWriter(bw *bufio.Writer, conn net.Conn, stopCh <-chan struc
 
 		b := appendUint32(buf[:0], nonce)
 		if _, err := bw.Write(b); err != nil {
-			err = fmt.Errorf("cannot send request ID to the server: %s", err)
+			err = fmt.Errorf("cannot send request ID to the server: %w", err)
 			c.doneError(wi, err)
 			return err
 		}
 
 		if err := wi.req.WriteRequest(bw); err != nil {
-			err = fmt.Errorf("cannot send request to the server: %s", err)
+			err = fmt.Errorf("cannot send request to the server: %w", err)
 			c.doneError(wi, err)
 			return err
 		}
 
 		if wi.resp == nil {
-			// wi is no longer needed, so release it.
 			releaseClientWorkItem(wi)
 		} else {
-			c.pendingResponsesLock.Lock()
+			c.pendingResponsesMu.Lock()
 			if _, ok := c.pendingResponses[nonce]; ok {
-				c.pendingResponsesLock.Unlock()
+				c.pendingResponsesMu.Unlock()
 				err := fmt.Errorf("request ID overflow. id=%d", nonce)
 				c.doneError(wi, err)
 				return err
 			}
 			c.pendingResponses[nonce] = wi
-			c.pendingResponsesLock.Unlock()
+			c.pendingResponsesMu.Unlock()
 		}
 
 		// re-arm flush channel
@@ -485,7 +537,7 @@ func (c *Client) connReader(br *bufio.Reader, conn net.Conn) error {
 
 			if t.Sub(lastReadDeadline) > (readTimeout >> 2) {
 				if err := conn.SetReadDeadline(t.Add(readTimeout)); err != nil {
-					return fmt.Errorf("cannot update read deadline: %s", err)
+					return fmt.Errorf("cannot update read deadline: %w", err)
 				}
 				lastReadDeadline = t
 			}
@@ -495,15 +547,15 @@ func (c *Client) connReader(br *bufio.Reader, conn net.Conn) error {
 			if err == io.EOF {
 				return nil
 			}
-			return fmt.Errorf("cannot read response ID: %s", err)
+			return fmt.Errorf("cannot read response ID: %w", err)
 		}
 
 		nonce := bytes2Uint32(buf)
 
-		c.pendingResponsesLock.Lock()
+		c.pendingResponsesMu.Lock()
 		wi := c.pendingResponses[nonce]
 		delete(c.pendingResponses, nonce)
-		c.pendingResponsesLock.Unlock()
+		c.pendingResponsesMu.Unlock()
 
 		resp = nil
 		if wi != nil {
@@ -514,7 +566,7 @@ func (c *Client) connReader(br *bufio.Reader, conn net.Conn) error {
 		}
 
 		if err := resp.ReadResponse(br); err != nil {
-			err = fmt.Errorf("cannot read response with ID %d: %s", nonce, err)
+			err = fmt.Errorf("cannot read response with ID %d: %w", nonce, err)
 			if wi != nil {
 				c.doneError(wi, err)
 			}
@@ -539,9 +591,9 @@ func (c *Client) doneError(wi *clientWorkItem, err error) {
 }
 
 func (c *Client) getError(err error) error {
-	c.lastErrLock.Lock()
+	c.lastErrMu.Lock()
 	lastErr := c.lastErr
-	c.lastErrLock.Unlock()
+	c.lastErrMu.Unlock()
 	if lastErr != nil {
 		return lastErr
 	}
@@ -549,9 +601,9 @@ func (c *Client) getError(err error) error {
 }
 
 func (c *Client) setLastError(err error) {
-	c.lastErrLock.Lock()
+	c.lastErrMu.Lock()
 	c.lastErr = err
-	c.lastErrLock.Unlock()
+	c.lastErrMu.Unlock()
 }
 
 type clientWorkItem struct {
