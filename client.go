@@ -352,7 +352,7 @@ func (c *Client) worker() {
 		}
 
 		c.connMu.Lock()
-		c.conn = realConn
+		c.conn = conn
 		c.connMu.Unlock()
 
 		laddr := conn.LocalAddr().String()
