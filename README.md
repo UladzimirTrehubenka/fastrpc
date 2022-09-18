@@ -1,10 +1,7 @@
-[![GoDoc](https://godoc.org/github.com/iwasaki-kenta/fastrpc?status.svg)](http://godoc.org/github.com/iwasaki-kenta/fastrpc)
-[![Go Report](https://goreportcard.com/badge/github.com/iwasaki-kenta/fastrpc)](https://goreportcard.com/report/github.com/iwasaki-kenta/fastrpc)
-
-
 # fastrpc
 
-Experimental fork of [valyala/fastrpc](https://github.com/valyala/fastrpc). Meant to be tested against high-latency p2p networks.
+Experimental fork of [valyala/fastrpc](https://github.com/valyala/fastrpc).
+Incorporated changes from [iwasaki-kenta/fastrpc](https://github.com/iwasaki-kenta/fastrpc).
 
 # Features
 
@@ -27,7 +24,7 @@ connection. This solves the following issues:
 GOMAXPROCS=1 go test -bench=. -benchmem
 goos: linux
 goarch: amd64
-pkg: github.com/iwasaki-kenta/fastrpc
+pkg: github.com/UladzimirTrehubenka/fastrpc
 BenchmarkCoarseTimeNow          347397258                3.39 ns/op            0 B/op          0 allocs/op
 BenchmarkTimeNow                22361860                51.9 ns/op             0 B/op          0 allocs/op
 BenchmarkEndToEndNoDelay1         363763              2831 ns/op          92.19 MB/s           0 B/op          0 allocs/op
@@ -50,7 +47,7 @@ BenchmarkSendNowait              3698457               320 ns/op               0
 GOMAXPROCS=4 go test -bench=. -benchmem
 goos: linux
 goarch: amd64
-pkg: github.com/iwasaki-kenta/fastrpc
+pkg: github.com/UladzimirTrehubenka/fastrpc
 BenchmarkCoarseTimeNow-4                1000000000               0.868 ns/op           0 B/op          0 allocs/op
 BenchmarkTimeNow-4                      77040884                13.8 ns/op             0 B/op          0 allocs/op
 BenchmarkEndToEndNoDelay1-4              1000000              1040 ns/op         250.99 MB/s           1 B/op          0 allocs/op

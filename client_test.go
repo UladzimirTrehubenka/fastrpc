@@ -3,13 +3,14 @@ package fastrpc
 import (
 	"bufio"
 	"fmt"
-	"github.com/iwasaki-kenta/fastrpc/tlv"
-	"github.com/valyala/fasthttp/fasthttputil"
 	"io"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/UladzimirTrehubenka/fastrpc/tlv"
+	"github.com/valyala/fasthttp/fasthttputil"
 )
 
 func TestClientNoServer(t *testing.T) {

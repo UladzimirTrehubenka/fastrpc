@@ -2,11 +2,12 @@ package fastrpc
 
 import (
 	"bytes"
-	"github.com/iwasaki-kenta/fastrpc/tlv"
 	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/UladzimirTrehubenka/fastrpc/tlv"
 )
 
 func BenchmarkEndToEndNoDelay1(b *testing.B) {
@@ -158,7 +159,8 @@ func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, 
 		c.MaxBatchDelay = batchDelay
 		cc = append(cc, c)
 	}
-	var clientIdx uint32
+
+	var clientIdx, doErrorsCount, bodyErrorsCount uint32
 
 	deadline := time.Now().Add(time.Hour)
 	b.SetParallelism(parallelism)
@@ -171,13 +173,17 @@ func benchmarkEndToEnd(b *testing.B, parallelism int, batchDelay time.Duration, 
 		req.SwapValue([]byte("foobar"))
 		for pb.Next() {
 			if err := c.DoDeadline(&req, &resp, deadline); err != nil {
-				b.Fatalf("unexpected error: %s", err)
+				atomic.AddUint32(&doErrorsCount, 1)
 			}
 			if !bytes.Equal(resp.Value(), expectedBody) {
-				b.Fatalf("unexpected body: %q. Expecting %q", resp.Value(), expectedBody)
+				atomic.AddUint32(&bodyErrorsCount, 1)
 			}
 		}
 	})
+
+	if doErrorsCount+bodyErrorsCount > 0 {
+		b.Errorf("Errors - do: %d, body: %d", doErrorsCount, bodyErrorsCount)
+	}
 
 	if err := serverStop(); err != nil {
 		b.Fatalf("cannot shutdown server: %s", err)

@@ -1,4 +1,4 @@
-module github.com/iwasaki-kenta/fastrpc
+module github.com/UladzimirTrehubenka/fastrpc
 
 go 1.13
 

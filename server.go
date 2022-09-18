@@ -3,7 +3,6 @@ package fastrpc
 import (
 	"bufio"
 	"fmt"
-	"github.com/valyala/fasthttp"
 	"io"
 	"log"
 	"net"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
 // HandlerCtx is an interface implementing context passed to Server.Handler
